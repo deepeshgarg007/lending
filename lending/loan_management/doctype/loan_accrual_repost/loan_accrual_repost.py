@@ -41,7 +41,7 @@ class LoanAccrualRepost(Document):
 					"Loan Write Off", {"loan": loan.loan, "is_settlement_write_off": 0}, "posting_date"
 				)
 				if written_off_date:
-					interest_accruals = self.get_interest_accrual_entries(loan.loan)
+					interest_accruals = self.get_interest_accrual_entries(loan.loan, loan.loan_disbursement)
 					for entry in interest_accruals:
 						gl_exists = frappe.db.exists(
 							"GL Entry",
@@ -84,7 +84,7 @@ class LoanAccrualRepost(Document):
 									doc.make_gl_entries(cancel=1)
 
 			elif loan_status in ("Disbursed", "Active"):
-				interest_accruals = self.get_interest_accrual_entries(loan.loan)
+				interest_accruals = self.get_interest_accrual_entries(loan.loan, loan.loan_disbursement)
 				for entry in interest_accruals:
 					gl_exists = frappe.db.exists(
 						"GL Entry",
@@ -95,14 +95,19 @@ class LoanAccrualRepost(Document):
 						doc = frappe.get_doc("Loan Interest Accrual", entry.name)
 						doc.make_gl_entries()
 
-	def get_interest_accrual_entries(self, loan):
+	def get_interest_accrual_entries(self, loan, loan_disbursement):
+		filters = {
+			"loan": loan,
+			"posting_date": ["between", [self.from_date, self.to_date]],
+			"interest_type": "Normal Interest",
+		}
+
+		if loan_disbursement:
+			filters["loan_disbursement"] = loan_disbursement
+
 		interest_accruals = frappe.get_all(
 			"Loan Interest Accrual",
-			filters={
-				"loan": loan,
-				"posting_date": ["between", [self.from_date, self.to_date]],
-				"interest_type": "Normal Interest",
-			},
+			filters=filters,
 			fields=["name", "posting_date", "docstatus", "loan_product"],
 		)
 
